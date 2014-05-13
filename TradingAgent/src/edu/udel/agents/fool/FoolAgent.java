@@ -95,6 +95,7 @@ public class FoolAgent extends Agent {
      */
     protected Queue<QueryReport> queryReports;
 
+    private String publisherAddress;
     /**
      * List of all the possible queries made available in the {@link RetailCatalog retail catalog}.
      */
@@ -156,7 +157,7 @@ public class FoolAgent extends Agent {
 
             // The publisher will interpret a null ad as
             // a request to persist the prior day's ad
-            Ad ad = null;
+            Ad ad = getAd(query);
             // ad = [ calculated optimal ad ]
 
 
@@ -186,8 +187,108 @@ public class FoolAgent extends Agent {
         }
     }
 
+    /**
+     * This constructs a proper Ad for a certain query
+     * @param query
+     * @return
+     */
+    private Ad getAd(Query query) {
+		// TODO make this more suitable for F0 types
+    		Product product = new Product(query.getManufacturer(),query.getComponent());
+    		Ad ad = new Ad(product);
+		return ad;
+	}
+    
+    /**
+     * This computes the weight for a certain query, the larger the weight is, the more money goes to the bidding for this query
+     * @param query
+     * @return
+     */
+    private double BidModifier(Query query) {
+    		double rankModifier = getRankModifier(rankQuery(query));
+    		double specialModifier = getSpecialModifier(query);
+    		double typeModifier = getTypeModifier(getType(query));
+    		return rankModifier*specialModifier*typeModifier;
+    }
 
     /**
+     * This computes the modifier for items that we are specialized in
+     * @param query
+     * @return
+     */
+	private double getSpecialModifier(Query query) {
+		// TODO Fine tune numbers
+		if (query.getComponent() == advertiserInfo.getComponentSpecialty() && query.getManufacturer() == advertiserInfo.getManufacturerSpecialty())
+			return 1.44;
+		else if (query.getComponent() != advertiserInfo.getComponentSpecialty() && query.getManufacturer() != advertiserInfo.getManufacturerSpecialty())
+			return 1;
+		
+		return 1.2;
+	}
+
+	/**
+	 * This computes the modifier for different types of queries
+	 * @param type
+	 * @return
+	 */
+	private double getTypeModifier(int type) {
+		// TODO Fine tune numbers
+		if (type == 2)
+			//F2 highest
+			return 1.2;
+		else if (type == 0)
+			//F0 lowest
+			return 0.8;
+		//F1 middle
+		return 1;
+	}
+
+	/**
+	 * This returns the type of a query
+	 * @param query
+	 * @return 0 for F0, 1 for F1, 2 for F2
+	 */
+	private int getType(Query query) {
+		// Check F2
+		if (query.getComponent() != null && query.getManufacturer() != null)
+			return 2;
+		// Check F0
+		if (query.getComponent() == null && query.getManufacturer() == null)
+			return 0;
+		// Otherwise F1
+		return 1;
+	}
+
+	/**
+	 * This computes the modifier based on query's popularity ranking
+	 * @param rank
+	 * @return
+	 */
+	private double getRankModifier(double rank) {
+		// TODO Fine tune numbers
+		double lambda = 0.18;
+		// rank here is a double between 0 and 1, 0 for highest rank, 1 for lowest rank
+		// The maximum rank modifier is exp(lambda)
+		return Math.exp(lambda*(1-rank));
+	}
+
+	/**
+	 * This returns the popularity ranking of a certain query
+	 * @param k
+	 * @return 0 for highest ranking and 1 for lowest ranking
+	 */
+	private double rankQuery(Query k) {
+		double kImpression = impressions.get(k);
+		double rank = 0.;
+		double totalRank = 15.;
+		for (Query queryItem : querySpace) {
+			if (impressions.get(queryItem) > kImpression)
+				rank = rank + 1.;
+		}
+		return rank / totalRank;
+	}
+
+	/**
      * Processes an incoming query report.
      *
      * @param queryReport the daily query report.
@@ -284,6 +385,7 @@ public class FoolAgent extends Agent {
      */
     protected void handleAdvertiserInfo(AdvertiserInfo advertiserInfo) {
         this.advertiserInfo = advertiserInfo;
+        publisherAddress = advertiserInfo.getPublisherId();
     }
 
     /**
