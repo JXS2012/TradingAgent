@@ -156,10 +156,10 @@ public class FoolAgent extends Agent {
         for(Query query : querySpace) {
             // The publisher will interpret a NaN bid as
             // a request to persist the prior day's bid
-            double bid = Double.NaN;
+            //double bid = Double.NaN;
             // bid = [ calculated optimal bid ]
-
-
+        	double bid = values.get(query) / clicks.get(query);
+        	
             // The publisher will interpret a null ad as
             // a request to persist the prior day's ad
             Ad ad = getAd(query);
