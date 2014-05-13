@@ -99,6 +99,12 @@ public class FoolAgent extends Agent {
      * List of all the possible queries made available in the {@link RetailCatalog retail catalog}.
      */
     protected Set<Query> querySpace;
+    
+    Map<Query, Double> impressions = new HashMap<Query, Double>();
+    Map<Query, Double> clicks = new HashMap<Query, Double>();
+    Map<Query, Double> conversions = new HashMap<Query, Double>();
+    Map<Query, Double> values = new HashMap<Query, Double>();
+
 
     public FoolAgent() {
         salesReports = new LinkedList<SalesReport>();
@@ -187,7 +193,14 @@ public class FoolAgent extends Agent {
      * @param queryReport the daily query report.
      */
     protected void handleQueryReport(QueryReport queryReport) {
-        queryReports.add(queryReport);
+		for (Query query : querySpace) {
+
+			int index = queryReport.indexForEntry(query);
+			if (index >= 0) {
+				impressions.put(query,impressions.get(query)+queryReport.getImpressions(index));
+				clicks.put(query, clicks.get(query)+queryReport.getClicks(index));
+			}
+		}
     }
 
     /**
@@ -197,6 +210,14 @@ public class FoolAgent extends Agent {
      */
     protected void handleSalesReport(SalesReport salesReport) {
         salesReports.add(salesReport);
+		for (Query query : querySpace) {
+
+			int index = salesReport.indexForEntry(query);
+			if (index >= 0) {
+				conversions.put(query,conversions.get(query)+salesReport.getConversions(index));
+				values.put(query, values.get(query)+salesReport.getRevenue(index));
+			}
+		}
     }
 
     /**
@@ -248,6 +269,13 @@ public class FoolAgent extends Agent {
             // The F2 query class
             querySpace.add(new Query(product.getManufacturer(), product.getComponent()));
         }
+        
+		for (Query query : querySpace) {
+			impressions.put(query, 100.);
+			clicks.put(query, 9.);
+			conversions.put(query,1.); 
+			values.put(query, retailCatalog.getSalesProfit(0));
+		}
     }
 
     /**
@@ -280,4 +308,5 @@ public class FoolAgent extends Agent {
         queryReports.clear();
         querySpace.clear();
     }
+    
 }
