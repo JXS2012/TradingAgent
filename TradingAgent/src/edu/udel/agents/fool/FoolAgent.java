@@ -8,6 +8,7 @@ import se.sics.isl.transport.Transportable;
 import edu.umich.eecs.tac.props.*;
 
 import java.util.*;
+
 //Test commit
 /**
  * This class is a skeletal implementation of a TAC/AA agent.
@@ -105,6 +106,10 @@ public class FoolAgent extends Agent {
     Map<Query, Double> clicks = new HashMap<Query, Double>();
     Map<Query, Double> conversions = new HashMap<Query, Double>();
     Map<Query, Double> values = new HashMap<Query, Double>();
+    
+    Map<String, Set<Query>> queriesForComponent = new HashMap<String, Set<Query>>();
+    
+    Map<String, Set<Query>> queriesForManufacturer = new HashMap<String, Set<Query>>();
 
 
     public FoolAgent() {
@@ -194,21 +199,73 @@ public class FoolAgent extends Agent {
      */
     private Ad getAd(Query query) {
 		// TODO make this more suitable for F0 types
+    	if (getType(query) == 2) {
+    		//Trivial for F2
     		Product product = new Product(query.getManufacturer(),query.getComponent());
     		Ad ad = new Ad(product);
-		return ad;
+    		return ad;}
+    	else if (getType(query) == 1) {
+    		//Little complex for F1
+    		Product product;
+    		if (query.getManufacturer() != null) {
+    			//F1 manufacturer
+    			String component = rankComponent(query.getManufacturer());
+    			product = new Product(query.getManufacturer(),component);
+    		} else {
+    			//F1 product
+    			String manufacturer = rankManufacturer(query.getComponent());
+    			product = new Product(manufacturer,query.getComponent()); 			
+    		}
+    		Ad ad = new Ad(product);
+    		return ad;
+    	} else {
+    		//Most complex for F0
+    		Product product = new Product(query.getManufacturer(),query.getComponent());
+    		Ad ad = new Ad(product);
+    		return ad;
+    	}
 	}
     
-    /**
+    private String rankManufacturer(String component) {
+		// TODO Auto-generated method stub
+    	Set<Query> queryForComponent = queriesForComponent.get(component);
+    	HashMap<Query, Double> scoreForQueries = new HashMap<Query, Double>();
+    	for (Query query : queryForComponent) {
+    		double score = getRankModifier(rankQuery(query,queryForComponent)) * getSpecialModifier(query);
+    		scoreForQueries.put(query, score);
+    	}
+    	
+        ValueComparator vc = new ValueComparator(scoreForQueries);
+        TreeMap<Query, Double> sorted = new TreeMap<Query, Double>(vc);
+        sorted.putAll(scoreForQueries);
+		return sorted.lastKey().getManufacturer();
+	}
+
+	private String rankComponent(String manufacturer) {
+		// TODO Auto-generated method stub
+    	Set<Query> queryForManufacturer = queriesForManufacturer.get(manufacturer);
+    	HashMap<Query, Double> scoreForQueries = new HashMap<Query, Double>();
+    	for (Query query : queryForManufacturer) {
+    		double score = getRankModifier(rankQuery(query,queryForManufacturer)) * getSpecialModifier(query);
+    		scoreForQueries.put(query, score);
+    	}
+    	
+        ValueComparator vc = new ValueComparator(scoreForQueries);
+        TreeMap<Query, Double> sorted = new TreeMap<Query, Double>(vc);
+        sorted.putAll(scoreForQueries);
+		return sorted.lastKey().getComponent();
+	}
+
+	/**
      * This computes the weight for a certain query, the larger the weight is, the more money goes to the bidding for this query
      * @param query
      * @return
      */
     private double BidModifier(Query query) {
-    		double rankModifier = getRankModifier(rankQuery(query));
-    		double specialModifier = getSpecialModifier(query);
-    		double typeModifier = getTypeModifier(getType(query));
-    		return rankModifier*specialModifier*typeModifier;
+    	double rankModifier = getRankModifier(rankQuery(query, querySpace));
+    	double specialModifier = getSpecialModifier(query);
+    	double typeModifier = getTypeModifier(getType(query));
+    	return rankModifier*specialModifier*typeModifier;
     }
 
     /**
@@ -277,11 +334,12 @@ public class FoolAgent extends Agent {
 	 * @param k
 	 * @return 0 for highest ranking and 1 for lowest ranking
 	 */
-	private double rankQuery(Query k) {
+	private double rankQuery(Query k, Set<Query> kList) {
 		double kImpression = impressions.get(k);
 		double rank = 0.;
-		double totalRank = 15.;
-		for (Query queryItem : querySpace) {
+		double totalRank = 0.;
+		for (Query queryItem : kList) {
+			totalRank ++;
 			if (impressions.get(queryItem) > kImpression)
 				rank = rank + 1.;
 		}
@@ -359,6 +417,7 @@ public class FoolAgent extends Agent {
         if(retailCatalog.size() > 0) {
             querySpace.add(new Query(null, null));
         }
+        
 
         for(Product product : retailCatalog) {
             // The F1 query classes
@@ -366,9 +425,11 @@ public class FoolAgent extends Agent {
             querySpace.add(new Query(product.getManufacturer(), null));
             // F1 Component only
             querySpace.add(new Query(null, product.getComponent()));
-
             // The F2 query class
             querySpace.add(new Query(product.getManufacturer(), product.getComponent()));
+            
+        	queriesForComponent.put(product.getComponent(), new LinkedHashSet<Query> ());
+        	queriesForManufacturer.put(product.getManufacturer(), new LinkedHashSet<Query> ());
         }
         
 		for (Query query : querySpace) {
@@ -376,7 +437,12 @@ public class FoolAgent extends Agent {
 			clicks.put(query, 9.);
 			conversions.put(query,1.); 
 			values.put(query, retailCatalog.getSalesProfit(0));
+		
+			if ( query.getComponent() != null && query.getManufacturer() != null) {
+				queriesForComponent.get(query.getComponent()).add(query);
+				queriesForManufacturer.get(query.getManufacturer()).add(query);}
 		}
+		
     }
 
     /**
@@ -414,6 +480,25 @@ public class FoolAgent extends Agent {
         conversions.clear();
         values.clear();
 
+    }
+    
+    static class ValueComparator implements Comparator<Query> {
+
+        Map<Query, Double> base;
+
+        ValueComparator(Map<Query, Double> base) {
+            this.base = base;
+        }
+
+        @Override
+        public int compare(Query a, Query b) {
+        	Double x = base.get(a);
+        	Double y = base.get(b);
+            if (x.equals(y)) {
+                return -1;
+            }
+            return x.compareTo(y);
+        }
     }
     
 }
