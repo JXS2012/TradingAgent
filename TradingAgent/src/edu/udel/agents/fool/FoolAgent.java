@@ -8,7 +8,6 @@ import se.sics.isl.transport.Transportable;
 import edu.umich.eecs.tac.props.*;
 
 import java.util.*;
-//Test commit
 /**
  * This class is a skeletal implementation of a TAC/AA agent.
  *
