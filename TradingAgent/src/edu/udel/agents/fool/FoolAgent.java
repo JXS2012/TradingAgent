@@ -224,7 +224,7 @@ public class FoolAgent extends Agent {
     		//Most complex for F0
     		Product product;
     		product = new Product(advertiserInfo.getManufacturerSpecialty(),advertiserInfo.getComponentSpecialty());
-    		Ad ad = new Ad(product);
+    		Ad ad = new Ad();
     		return ad;
     	}
 	}
