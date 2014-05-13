@@ -158,7 +158,7 @@ public class FoolAgent extends Agent {
             // a request to persist the prior day's bid
             //double bid = Double.NaN;
             // bid = [ calculated optimal bid ]
-        	double bid = values.get(query) / clicks.get(query);
+        	double bid = values.get(query) / clicks.get(query) * BidModifier(query);
         	
             // The publisher will interpret a null ad as
             // a request to persist the prior day's ad
@@ -221,7 +221,7 @@ public class FoolAgent extends Agent {
     	} else {
     		//Most complex for F0
     		Product product = new Product(query.getManufacturer(),query.getComponent());
-    		Ad ad = new Ad(product);
+    		Ad ad = new Ad();
     		return ad;
     	}
 	}
