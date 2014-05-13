@@ -158,14 +158,15 @@ public class FoolAgent extends Agent {
             // a request to persist the prior day's bid
             //double bid = Double.NaN;
             // bid = [ calculated optimal bid ]
-        	double bid = values.get(query) / clicks.get(query) * BidModifier(query);
         	
             // The publisher will interpret a null ad as
             // a request to persist the prior day's ad
             Ad ad = getAd(query);
             // ad = [ calculated optimal ad ]
-
-
+        	Product product = ad.getProduct();
+        	double bid = Math.min(0.2*retailCatalog.getSalesProfit(product), values.get(query) / clicks.get(query) * BidModifier(query));
+        	
+        	
             // The publisher will interpret a NaN spend limit as
             // a request to persist the prior day's spend limit
             double spendLimit = Double.NaN;
@@ -220,8 +221,9 @@ public class FoolAgent extends Agent {
     		return ad;
     	} else {
     		//Most complex for F0
-    		Product product = new Product(query.getManufacturer(),query.getComponent());
-    		Ad ad = new Ad();
+    		Product product;
+    		product = new Product(advertiserInfo.getManufacturerSpecialty(),advertiserInfo.getComponentSpecialty());
+    		Ad ad = new Ad(product);
     		return ad;
     	}
 	}
