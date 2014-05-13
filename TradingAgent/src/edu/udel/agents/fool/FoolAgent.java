@@ -306,7 +306,12 @@ public class FoolAgent extends Agent {
     protected void simulationFinished() {
         salesReports.clear();
         queryReports.clear();
-        querySpace.clear();
+        querySpace.clear();    
+        impressions.clear();
+        clicks.clear();
+        conversions.clear();
+        values.clear();
+
     }
     
 }
