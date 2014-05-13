@@ -2,11 +2,11 @@
 <classpath>
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.7"/>
-	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/aa-agent-0.9.6.jar"/>
-	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/aa-common-0.9.6.jar"/>
-	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/example-agent-0.9.5.jar"/>
-	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/example-agent-0.9.6.jar"/>
-	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/org.mortbay.jetty-4.2.27.jar"/>
-	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/tasim-0.8.0.4.jar"/>
+	<classpathentry kind="lib" path="lib/aa-agent-0.9.6.jar"/>
+	<classpathentry kind="lib" path="lib/aa-common-0.9.6.jar"/>
+	<classpathentry kind="lib" path="lib/example-agent-0.9.5.jar"/>
+	<classpathentry kind="lib" path="lib/example-agent-0.9.6.jar"/>
+	<classpathentry kind="lib" path="lib/org.mortbay.jetty-4.2.27.jar"/>
+	<classpathentry kind="lib" path="lib/tasim-0.8.0.4.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
