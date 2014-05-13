@@ -164,7 +164,8 @@ public class FoolAgent extends Agent {
             Ad ad = getAd(query);
             // ad = [ calculated optimal ad ]
         	Product product = ad.getProduct();
-        	double bid = Math.min(0.2*retailCatalog.getSalesProfit(product), values.get(query) / clicks.get(query) * BidModifier(query));
+        	double bidBase = 0.8;
+        	double bid = Math.min(0.2*retailCatalog.getSalesProfit(product), bidBase * BidModifier(query));
         	
         	
             // The publisher will interpret a NaN spend limit as
