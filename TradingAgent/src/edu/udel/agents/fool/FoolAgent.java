@@ -8,6 +8,8 @@ import se.sics.isl.transport.Transportable;
 import edu.umich.eecs.tac.props.*;
 
 import java.util.*;
+
+//git@github.com/JXS2012/TradingAgent.git
 /**
  * This class is a skeletal implementation of a TAC/AA agent.
  *
@@ -15,6 +17,15 @@ import java.util.*;
  * @see <a href="http://aa.tradingagents.org/documentation">TAC AA Documentation</a>
  */
 public class FoolAgent extends Agent {
+	
+	/** User defined constants **/
+	
+	//Percentage of total revenue to be spent on ads
+	double adRevenueRatioPercent = 0.2;
+	
+	//Percent
+	double baseBidPerProductRevenuePercent = 0.2;
+		
     /**
      * Basic simulation information. {@link StartInfo} contains
      * <ul>
@@ -84,7 +95,7 @@ public class FoolAgent extends Agent {
      * {@link SalesReport sales report} contains the conversions and sales revenue accrued by the agent for each query
      * class during the period.
      */
-    protected Queue<SalesReport> salesReports;
+    protected List<SalesReport> salesReports;
 
     /**
      * The list contains all of the {@link QueryReport query reports} delivered to the agent.  Each
@@ -92,7 +103,7 @@ public class FoolAgent extends Agent {
      * by the agent for each query class during the period as well as the positions and displayed ads of all advertisers
      * during the period for each query class.
      */
-    protected Queue<QueryReport> queryReports;
+    protected List<QueryReport> queryReports;
 
     private String publisherAddress;
     /**
@@ -104,6 +115,12 @@ public class FoolAgent extends Agent {
     Map<Query, Double> clicks = new HashMap<Query, Double>();
     Map<Query, Double> conversions = new HashMap<Query, Double>();
     Map<Query, Double> values = new HashMap<Query, Double>();
+    Map<Query, Double> baseBid = new HashMap<Query, Double>();
+    Map<Query, Double> maxBid = new HashMap<Query, Double>();
+    
+    Map<String, Set<Query>> queriesForComponent = new HashMap<String, Set<Query>>();
+    
+    Map<String, Set<Query>> queriesForManufacturer = new HashMap<String, Set<Query>>();
 
 
     public FoolAgent() {
@@ -144,22 +161,31 @@ public class FoolAgent extends Agent {
      */
     protected void sendBidAndAds() {
         BidBundle bidBundle = new BidBundle();
+        
+		computeBaseBids();	
 
-        String publisherAddress = advertiserInfo.getPublisherId();
+        //String publisherAddress = advertiserInfo.getPublisherId();
 
         for(Query query : querySpace) {
             // The publisher will interpret a NaN bid as
             // a request to persist the prior day's bid
-            double bid = Double.NaN;
+            //double bid = Double.NaN;
             // bid = [ calculated optimal bid ]
-
-
+        	
             // The publisher will interpret a null ad as
             // a request to persist the prior day's ad
             Ad ad = getAd(query);
             // ad = [ calculated optimal ad ]
-
-
+        	Product product = ad.getProduct();
+        	double bidBase = baseBid.get(query);
+        	double bid = 0;
+        	//if (maxBid.get(query) <= 0)	{
+        		bid = Math.min(bidBase , 0.8 * BidModifier(query));
+        	//} else {
+        		//bid = Math.min(maxBid.get(query), bidBase * BidModifier(query));
+        	//}
+        	
+        	
             // The publisher will interpret a NaN spend limit as
             // a request to persist the prior day's spend limit
             double spendLimit = Double.NaN;
@@ -182,6 +208,7 @@ public class FoolAgent extends Agent {
 
         // Send the bid bundle to the publisher
         if (publisherAddress != null) {
+        	System.out.println(publisherAddress);
             sendMessage(publisherAddress, bidBundle);
         }
     }
@@ -193,21 +220,72 @@ public class FoolAgent extends Agent {
      */
     private Ad getAd(Query query) {
 		// TODO make this more suitable for F0 types
+    	if (getType(query) == 2) {
+    		//Trivial for F2
     		Product product = new Product(query.getManufacturer(),query.getComponent());
     		Ad ad = new Ad(product);
-		return ad;
+    		return ad;
+    	} else if (getType(query) == 1) {
+    		//Little complex for F1
+    		Product product;
+    		if (query.getManufacturer() != null) {
+    			//F1 manufacturer
+    			String component = rankComponent(query.getManufacturer());
+    			product = new Product(query.getManufacturer(),component);
+    		} else {
+    			//F1 product
+    			String manufacturer = rankManufacturer(query.getComponent());
+    			product = new Product(manufacturer,query.getComponent()); 			
+    		}
+    		Ad ad = new Ad(product);
+    		return ad;
+    	} else {
+    		//Most complex for F0
+    		Product product;
+    		product = new Product(advertiserInfo.getManufacturerSpecialty(),advertiserInfo.getComponentSpecialty());
+    		Ad ad = new Ad();
+    		return ad;
+    	}
 	}
     
-    /**
+    private String rankManufacturer(String component) {
+    	Set<Query> queryForComponent = queriesForComponent.get(component);
+    	HashMap<Query, Double> scoreForQueries = new HashMap<Query, Double>();
+    	for (Query query : queryForComponent) {
+    		double score = getRankModifier(rankQuery(query,queryForComponent)) * getSpecialModifier(query);
+    		scoreForQueries.put(query, score);
+    	}
+    	
+        ValueComparator vc = new ValueComparator(scoreForQueries);
+        TreeMap<Query, Double> sorted = new TreeMap<Query, Double>(vc);
+        sorted.putAll(scoreForQueries);
+		return sorted.lastKey().getManufacturer();
+	}
+
+	private String rankComponent(String manufacturer) {
+    	Set<Query> queryForManufacturer = queriesForManufacturer.get(manufacturer);
+    	HashMap<Query, Double> scoreForQueries = new HashMap<Query, Double>();
+    	for (Query query : queryForManufacturer) {
+    		double score = getRankModifier(rankQuery(query,queryForManufacturer)) * getSpecialModifier(query);
+    		scoreForQueries.put(query, score);
+    	}
+    	
+        ValueComparator vc = new ValueComparator(scoreForQueries);
+        TreeMap<Query, Double> sorted = new TreeMap<Query, Double>(vc);
+        sorted.putAll(scoreForQueries);
+		return sorted.lastKey().getComponent();
+	}
+
+	/**
      * This computes the weight for a certain query, the larger the weight is, the more money goes to the bidding for this query
      * @param query
      * @return
      */
     private double BidModifier(Query query) {
-    		double rankModifier = getRankModifier(rankQuery(query));
-    		double specialModifier = getSpecialModifier(query);
-    		double typeModifier = getTypeModifier(getType(query));
-    		return rankModifier*specialModifier*typeModifier;
+    	double rankModifier = getRankModifier(rankQuery(query, querySpace));
+    	double specialModifier = getSpecialModifier(query);
+    	double typeModifier = getTypeModifier(getType(query));
+    	return rankModifier*specialModifier*typeModifier;
     }
 
     /**
@@ -276,11 +354,12 @@ public class FoolAgent extends Agent {
 	 * @param k
 	 * @return 0 for highest ranking and 1 for lowest ranking
 	 */
-	private double rankQuery(Query k) {
+	private double rankQuery(Query k, Set<Query> kList) {
 		double kImpression = impressions.get(k);
 		double rank = 0.;
-		double totalRank = 15.;
-		for (Query queryItem : querySpace) {
+		double totalRank = 0.;
+		for (Query queryItem : kList) {
+			totalRank ++;
 			if (impressions.get(queryItem) > kImpression)
 				rank = rank + 1.;
 		}
@@ -327,6 +406,8 @@ public class FoolAgent extends Agent {
      * @param simulationStatus the daily simulation status.
      */
     protected void handleSimulationStatus(SimulationStatus simulationStatus) {
+    	
+        computeQueryBidLimits();
         sendBidAndAds();
     }
 
@@ -339,7 +420,7 @@ public class FoolAgent extends Agent {
     }
 
     /**
-     * Processrs the slot information.
+     * Processes the slot information.
      * @param slotInfo the slot information.
      */
     protected void handleSlotInfo(SlotInfo slotInfo) {
@@ -358,6 +439,7 @@ public class FoolAgent extends Agent {
         if(retailCatalog.size() > 0) {
             querySpace.add(new Query(null, null));
         }
+        
 
         for(Product product : retailCatalog) {
             // The F1 query classes
@@ -365,9 +447,11 @@ public class FoolAgent extends Agent {
             querySpace.add(new Query(product.getManufacturer(), null));
             // F1 Component only
             querySpace.add(new Query(null, product.getComponent()));
-
             // The F2 query class
             querySpace.add(new Query(product.getManufacturer(), product.getComponent()));
+            
+        	queriesForComponent.put(product.getComponent(), new LinkedHashSet<Query> ());
+        	queriesForManufacturer.put(product.getManufacturer(), new LinkedHashSet<Query> ());
         }
         
 		for (Query query : querySpace) {
@@ -375,7 +459,11 @@ public class FoolAgent extends Agent {
 			clicks.put(query, 9.);
 			conversions.put(query,1.); 
 			values.put(query, retailCatalog.getSalesProfit(0));
-		}
+		
+			if ( query.getComponent() != null && query.getManufacturer() != null) {
+				queriesForComponent.get(query.getComponent()).add(query);
+				queriesForManufacturer.get(query.getManufacturer()).add(query);}
+		}	
     }
 
     /**
@@ -415,4 +503,63 @@ public class FoolAgent extends Agent {
 
     }
     
+    static class ValueComparator implements Comparator<Query> {
+
+        Map<Query, Double> base;
+
+        ValueComparator(Map<Query, Double> base) {
+            this.base = base;
+        }
+
+        @Override
+        public int compare(Query a, Query b) {
+        	Double x = base.get(a);
+        	Double y = base.get(b);
+            if (x.equals(y)) {
+                return -1;
+            }
+            return x.compareTo(y);
+        }
+    }
+    
+    /**
+     * Computes the base bid value for each type of product
+     */
+    private void computeBaseBids()	{
+    	for (Query query : querySpace) {
+    		Ad ad = getAd(query);
+        	Product product = ad.getProduct();       	
+    		baseBid.put(query, retailCatalog.getSalesProfit(product) * baseBidPerProductRevenuePercent);
+    	}
+    }
+
+    /**
+     * Computes the maximum bid value for each type of product
+     */
+    private void computeQueryBidLimits()	{
+    	SalesReport salesReport = salesReports.get(salesReports.size()-1);
+    	double totalRevenuePerDay = 0;
+    	double totalRevenuePerProduct = 0;
+    	double maxBidCurrProduct = 0;
+    	
+		for (Query query : querySpace) {
+			int index = salesReport.indexForEntry(query);
+			if (index >= 0) {
+				totalRevenuePerDay += salesReport.getRevenue(index);
+			}
+			
+    		Ad ad = getAd(query);
+        	Product product = ad.getProduct();       	
+
+			totalRevenuePerProduct += salesReport.getRevenue(query);
+		}
+		
+		for (Query query : querySpace) {
+    		Ad ad = getAd(query);
+        	Product product = ad.getProduct();       	
+        	maxBidCurrProduct = retailCatalog.getSalesProfit(product) * 
+        			(totalRevenuePerDay/totalRevenuePerProduct);
+			maxBid.put(query, maxBidCurrProduct);
+		}
+    }
 }
