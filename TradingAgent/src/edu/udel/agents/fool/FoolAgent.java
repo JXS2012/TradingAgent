@@ -53,7 +53,7 @@ public class FoolAgent extends Agent {
 	KMeans kmeansClusterer = new KMeans(2);
 	
 	//Spike interval percent
-	double minSpikeImpressionsDifference = 15;
+	double minSpikeImpressionsDifference = 0.15;
 		
     /**
      * Basic simulation information. {@link StartInfo} contains
@@ -784,8 +784,9 @@ public class FoolAgent extends Agent {
         		System.out.println("Cluster centers : "+clusterCenter1+"\t"+clusterCenter2);
         		
         		if(Math.min(clusterCenter1,clusterCenter2)!=0)	{
-        			if(Math.max(clusterCenter1,clusterCenter2)/Math.min(clusterCenter1,clusterCenter2) 
-        					> minSpikeImpressionsDifference)	{
+        			if(Math.max(clusterCenter1,clusterCenter2)
+        					-Math.min(clusterCenter1,clusterCenter2) > 
+        					minSpikeImpressionsDifference * Math.min(clusterCenter1,clusterCenter2))	{
         				if(!spikeDetectPreviousDay.get(query)){
         					spikeDetect.put(query, true);
         					spikeDetectPreviousDay.put(query,true);
