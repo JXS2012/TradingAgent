@@ -8,5 +8,17 @@
 	<classpathentry kind="lib" path="lib/example-agent-0.9.6.jar"/>
 	<classpathentry kind="lib" path="lib/org.mortbay.jetty-4.2.27.jar"/>
 	<classpathentry kind="lib" path="lib/tasim-0.8.0.4.jar"/>
+	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/aa-agent-0.9.6.jar"/>
+	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/aa-common-0.9.6.jar"/>
+	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/ajt-1.20.jar"/>
+	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/commons-math-1.2.jar"/>
+	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/example-agent-0.9.5.jar"/>
+	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/example-agent-0.9.6.jar"/>
+	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/Jama-1.0.2.jar"/>
+	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/javaml-0.1.5.jar"/>
+	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/libsvm.jar"/>
+	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/org.mortbay.jetty-4.2.27.jar"/>
+	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/tasim-0.8.0.4.jar"/>
+	<classpathentry kind="lib" path="/home/jianxin/git/TradingAgent/TradingAgent/lib/weka.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
