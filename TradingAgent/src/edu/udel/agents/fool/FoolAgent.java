@@ -32,7 +32,7 @@ public class FoolAgent extends Agent {
 	double adRevenueRatioPercent = 0.2;
 	
 	//Percent
-	double baseBidPerProductRevenuePercent = 0.1;
+	double baseBidPerProductRevenuePercent = 0.09;
 	
 	//Current simulation day
 	int simulationDay = 0;
@@ -41,10 +41,10 @@ public class FoolAgent extends Agent {
 	int initialSimulationDays = 5;
 	
 	//Agressive bid percent
-	double aggressiveBidPercent = 2;
+	double aggressiveBidPercent = 1.0;
 	
 	//Agressive bid percent
-	double spikeBidPercent = 3;
+	double spikeBidPercent = 1.1;
 	
 	//Maximum bid multiplicative factor
 	double maxBidFactor = 4;
@@ -133,6 +133,8 @@ public class FoolAgent extends Agent {
      * during the period for each query class.
      */
     protected List<QueryReport> queryReports;
+    
+    private Queue<SalesReport> conversionInWindow;
 
     private String publisherAddress;
     /**
@@ -169,6 +171,7 @@ public class FoolAgent extends Agent {
         salesReports = new LinkedList<SalesReport>();
         queryReports = new LinkedList<QueryReport>();
         querySpace = new LinkedHashSet<Query>();
+        conversionInWindow = new LinkedList<SalesReport>();
     }
 
     /**
@@ -258,11 +261,15 @@ public class FoolAgent extends Agent {
     	double bidBase = baseBid.get(query);
     	double bid = 0;
 		Ad ad = getAd(query);
-    	Product product = ad.getProduct();  
+		Product product;
+		if (ad.getProduct() != null)
+			product = ad.getProduct();
+		else
+			product = new Product(null, null);
 
     	if (simulationDay <= initialSimulationDays)	{
     		//System.out.println("Initial simulation day");
-    		bid = Math.min(bidBase , bidBase * aggressiveBidPercent * BidModifier(query));
+    		bid = Math.max(bidBase , bidBase * aggressiveBidPercent * BidModifier(query));
     		System.out.println("Curr Product: "+product.getManufacturer()+"\t"+
     				product.getComponent()+"\t"+
     				"Initial"+"\t"+
@@ -326,7 +333,7 @@ public class FoolAgent extends Agent {
     		Product product;
     		product = new Product(advertiserInfo.getManufacturerSpecialty(),advertiserInfo.getComponentSpecialty());
     		product = new Product(null, null);
-    		Ad ad = new Ad(product);
+    		Ad ad = new Ad();
     		return ad;
     	}
 	}
@@ -369,10 +376,33 @@ public class FoolAgent extends Agent {
     	double specialModifier = getSpecialModifier(query);
     	double typeModifier = getTypeModifier(getType(query));
     	double loseModifier = getLoseModifier(query);
-    	return rankModifier*specialModifier*typeModifier*loseModifier;
+    	double capacityModifier = getCapacityModifier();
+    	return rankModifier*specialModifier*typeModifier*loseModifier*capacityModifier;
     }
 
     /**
+     * If we over sale, we reduce bid
+     * @return
+     */
+    private double getCapacityModifier() {
+		// TODO Auto-generated method stub
+    	int capacity = advertiserInfo.getDistributionCapacity();
+    	
+    	double totalConversion = 0;
+    	for (SalesReport s : conversionInWindow)
+    	{
+    		double dailyConversion = 0;
+    		for (Query q : querySpace)
+    			dailyConversion = dailyConversion + s.getConversions(q);
+    		totalConversion = totalConversion + dailyConversion;
+    	}
+    	
+    	double saleRate = totalConversion / capacity;
+    	System.out.format("Capacity rate %f", saleRate);
+    	return Math.min(1,0.9*Math.exp(1 - saleRate));
+	}
+
+	/**
      * This computes the modifier for the queries that we lose. This is a special case because we no longer no the impression of the query
      * @param query
      * @return
@@ -380,11 +410,11 @@ public class FoolAgent extends Agent {
     private double getLoseModifier(Query query) {
 		// TODO Auto-generated method stub
     	double position = currQueryReport.getPosition(query, advertiserInfo.getAdvertiserId());
-    	System.out.format("for query %s %s agent %s at position %f\n", query.getManufacturer(), query.getComponent(), advertiserInfo.getAdvertiserId(), position);
+    	//System.out.format("for query %s %s agent %s at position %f\n", query.getManufacturer(), query.getComponent(), advertiserInfo.getAdvertiserId(), position);
     	if (Double.isNaN(position))
     	{
-    		System.out.format("for query %s %s agent %s get buffed\n", query.getManufacturer(), query.getComponent(), advertiserInfo.getAdvertiserId());
-    		return 1.8;	
+    		//System.out.format("for query %s %s agent %s get buffed\n", query.getManufacturer(), query.getComponent(), advertiserInfo.getAdvertiserId());
+    		return 1.0;	
     	}
     	else
     		return 1.0;
@@ -458,11 +488,17 @@ public class FoolAgent extends Agent {
 	 */
 	private double rankQuery(Query k, Set<Query> kList) {
 		double kImpression = impressions.get(k);
+		double kValue = values.get(k);
 		double rank = 0.;
 		double totalRank = 0.;
 		for (Query queryItem : kList) {
 			totalRank ++;
 			if (impressions.get(queryItem) > kImpression)
+				rank = rank + 1.;
+		}
+		for (Query queryItem : kList) {
+			totalRank ++;
+			if (values.get(queryItem) > kValue)
 				rank = rank + 1.;
 		}
 		return rank / totalRank;
@@ -512,6 +548,13 @@ public class FoolAgent extends Agent {
 				conversions.put(query,conversions.get(query)+salesReport.getConversions(index));
 				values.put(query, values.get(query)+salesReport.getRevenue(index));
 			}
+		}
+		
+		if (conversionInWindow.size() < advertiserInfo.getDistributionWindow())
+			conversionInWindow.add(salesReport);
+		else
+		{	conversionInWindow.remove();
+			conversionInWindow.add(salesReport);
 		}
     }
 
@@ -658,6 +701,7 @@ public class FoolAgent extends Agent {
         maxBid.clear();
         spikeDetect.clear();
         spikeDetectPreviousDay.clear();
+        conversionInWindow.clear();
     }
     
     static class ValueComparator implements Comparator<Query> {
@@ -734,7 +778,7 @@ public class FoolAgent extends Agent {
         		maxBidCurrProduct = maxBidFactor * 10 * 
         				(totalProductRevenue/totalRevenue);
         	}        	
-			maxBid.put(query, maxBidCurrProduct);
+			maxBid.put(query, Math.max(2, maxBidCurrProduct));
 			
     		//System.out.println("Curr Product: "+product.getManufacturer()+"\t"+
     		//		product.getComponent()+"\t"+baseBid.get(query)+"\t"+maxBid.get(query));
