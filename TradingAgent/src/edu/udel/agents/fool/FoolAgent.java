@@ -9,6 +9,14 @@ import edu.umich.eecs.tac.props.*;
 
 import java.util.*;
 
+import net.sf.javaml.*;
+import net.sf.javaml.clustering.KMeans;
+import net.sf.javaml.core.Dataset;
+import net.sf.javaml.core.DefaultDataset;
+import net.sf.javaml.core.DenseInstance;
+import net.sf.javaml.core.Instance;
+import net.sf.javaml.tools.DatasetTools;
+
 //git@github.com/JXS2012/TradingAgent.git
 /**
  * This class is a skeletal implementation of a TAC/AA agent.
@@ -24,7 +32,28 @@ public class FoolAgent extends Agent {
 	double adRevenueRatioPercent = 0.2;
 	
 	//Percent
-	double baseBidPerProductRevenuePercent = 0.2;
+	double baseBidPerProductRevenuePercent = 0.1;
+	
+	//Current simulation day
+	int simulationDay = 0;
+	
+	//Agressive bidding initial days
+	int initialSimulationDays = 5;
+	
+	//Agressive bid percent
+	double aggressiveBidPercent = 2;
+	
+	//Agressive bid percent
+	double spikeBidPercent = 3;
+	
+	//Maximum bid multiplicative factor
+	double maxBidFactor = 4;
+	
+	//K-Means Clustering object
+	KMeans kmeansClusterer = new KMeans(2);
+	
+	//Spike interval percent
+	double minSpikeImpressionsDifference = 15;
 		
     /**
      * Basic simulation information. {@link StartInfo} contains
@@ -115,8 +144,19 @@ public class FoolAgent extends Agent {
     Map<Query, Double> clicks = new HashMap<Query, Double>();
     Map<Query, Double> conversions = new HashMap<Query, Double>();
     Map<Query, Double> values = new HashMap<Query, Double>();
+    
+    //Minimum bids for each product
     Map<Query, Double> baseBid = new HashMap<Query, Double>();
+    
+    //Maximum bids for each product
     Map<Query, Double> maxBid = new HashMap<Query, Double>();
+    
+    //Spike status of each product
+    Map<Query, Boolean> spikeDetect = new HashMap<Query, Boolean>();
+    Map<Query, Boolean> spikeDetectPreviousDay = new HashMap<Query, Boolean>();
+    
+    //Impressions dataset for each product
+    Map<Query, List<Double>> impressionData = new HashMap<Query, List<Double>>();
     
     Map<String, Set<Query>> queriesForComponent = new HashMap<String, Set<Query>>();
     
@@ -162,8 +202,6 @@ public class FoolAgent extends Agent {
     protected void sendBidAndAds() {
         BidBundle bidBundle = new BidBundle();
         
-		computeBaseBids();	
-
         //String publisherAddress = advertiserInfo.getPublisherId();
 
         for(Query query : querySpace) {
@@ -176,14 +214,9 @@ public class FoolAgent extends Agent {
             // a request to persist the prior day's ad
             Ad ad = getAd(query);
             // ad = [ calculated optimal ad ]
-        	Product product = ad.getProduct();
-        	double bidBase = baseBid.get(query);
-        	double bid = 0;
-        	//if (maxBid.get(query) <= 0)	{
-        		bid = Math.min(bidBase , 0.8 * BidModifier(query));
-        	//} else {
-        		//bid = Math.min(maxBid.get(query), bidBase * BidModifier(query));
-        	//}
+        	//Product product = ad.getProduct();
+        	
+        	double bid = computeBid(query);	
         	
         	
             // The publisher will interpret a NaN spend limit as
@@ -208,9 +241,56 @@ public class FoolAgent extends Agent {
 
         // Send the bid bundle to the publisher
         if (publisherAddress != null) {
-        	System.out.println(publisherAddress);
+        	//System.out.println(publisherAddress);
             sendMessage(publisherAddress, bidBundle);
         }
+    }
+    
+    /**
+     * This computes the bid value
+     * @param query
+     * @return bid value
+     */    
+    private double computeBid(Query query)	{
+
+    	double bidBase = baseBid.get(query);
+    	double bid = 0;
+		Ad ad = getAd(query);
+    	Product product = ad.getProduct();  
+
+    	if (simulationDay <= initialSimulationDays)	{
+    		//System.out.println("Initial simulation day");
+    		bid = Math.min(bidBase , bidBase * aggressiveBidPercent * BidModifier(query));
+    		System.out.println("Curr Product: "+product.getManufacturer()+"\t"+
+    				product.getComponent()+"\t"+
+    				"Initial"+"\t"+
+    				baseBid.get(query)+"\t"+
+    				maxBid.get(query)+"\t"+
+    				bid);
+    		
+    	} else if (spikeDetect.get(query)) {
+    		bid = Math.max(bidBase , bidBase * spikeBidPercent * BidModifier(query));
+    		
+    		System.out.println("Curr Product: "+product.getManufacturer()+"\t"+
+    				product.getComponent()+"\t"+
+    				"Spike"+"\t"+
+    				baseBid.get(query)+"\t"+
+    				maxBid.get(query)+"\t"+
+    				bid);
+    	} else {
+    		//System.out.println("Regular simulation day");
+    		bid = Math.min(maxBid.get(query), bidBase * BidModifier(query));
+    		
+    		System.out.println("Curr Product: "+product.getManufacturer()+"\t"+
+    				product.getComponent()+"\t"+
+    				"Regular"+"\t"+
+    				baseBid.get(query)+"\t"+
+    				maxBid.get(query)+"\t"+
+    				bid);
+    	}
+
+
+    	return(bid);
     }
 
     /**
@@ -243,7 +323,8 @@ public class FoolAgent extends Agent {
     		//Most complex for F0
     		Product product;
     		product = new Product(advertiserInfo.getManufacturerSpecialty(),advertiserInfo.getComponentSpecialty());
-    		Ad ad = new Ad();
+    		product = new Product(null, null);
+    		Ad ad = new Ad(product);
     		return ad;
     	}
 	}
@@ -373,10 +454,21 @@ public class FoolAgent extends Agent {
      */
     protected void handleQueryReport(QueryReport queryReport) {
 		for (Query query : querySpace) {
-
 			int index = queryReport.indexForEntry(query);
 			if (index >= 0) {
 				impressions.put(query,impressions.get(query)+queryReport.getImpressions(index));
+				
+				if(queryReport.getImpressions(index) != 0.0)	{					
+					List<Double> tempList = new ArrayList<Double>();				
+					if (impressionData.containsKey(query))	{					
+						tempList.addAll(impressionData.get(query));	
+						//System.out.println("Impressions data before adding : "+impressionData.get(query));
+					} 
+					tempList.add((double)queryReport.getImpressions(index));
+					impressionData.put(query, tempList);
+					//System.out.println("Impressions data after adding : "+impressionData.get(query));
+				}
+				
 				clicks.put(query, clicks.get(query)+queryReport.getClicks(index));
 			}
 		}
@@ -406,9 +498,23 @@ public class FoolAgent extends Agent {
      * @param simulationStatus the daily simulation status.
      */
     protected void handleSimulationStatus(SimulationStatus simulationStatus) {
+    	simulationDay = simulationStatus.getCurrentDate();
+    	
+    	computeBaseBids();
+    	
+    	System.out.println("Current simulation date is "+simulationDay);
+    	
+    	System.out.println("Spike detection started");
+    	spikeDetection();
+    	System.out.println("Spike detection finished");
     	
         computeQueryBidLimits();
+    	
+        //System.out.println("Sending bids and ads started");
         sendBidAndAds();
+        //System.out.println("Sending bids and ads finished");
+        
+        resetSpikeDetection();
     }
 
     /**
@@ -464,6 +570,7 @@ public class FoolAgent extends Agent {
 				queriesForComponent.get(query.getComponent()).add(query);
 				queriesForManufacturer.get(query.getManufacturer()).add(query);}
 		}	
+		
     }
 
     /**
@@ -486,10 +593,31 @@ public class FoolAgent extends Agent {
     /**
      * Prepares the agent for a new simulation.
      */
-    protected void simulationSetup() {
+    protected void simulationSetup() {    	
+    	initializeSpikeDetection();
     }
 
     /**
+     * Resets all spikes to false. This is done every day as the spike detected at 
+     * day d-1 will last only the following day (day d+1).
+     */
+	private void resetSpikeDetection() {
+		for (Query query : querySpace) {
+    		spikeDetect.put(query, false);
+		}
+	}
+
+    /**
+     * Initialize spikes. Sets all spikes to false. 
+     */
+	private void initializeSpikeDetection() {
+		for (Query query : querySpace) {
+    		spikeDetect.put(query, false);
+    		spikeDetectPreviousDay.put(query, false);
+		}
+	}
+	
+	/**
      * Runs any post-processes required for the agent after a simulation ends.
      */
     protected void simulationFinished() {
@@ -500,7 +628,11 @@ public class FoolAgent extends Agent {
         clicks.clear();
         conversions.clear();
         values.clear();
-
+        impressionData.clear();
+        baseBid.clear();
+        maxBid.clear();
+        spikeDetect.clear();
+        spikeDetectPreviousDay.clear();
     }
     
     static class ValueComparator implements Comparator<Query> {
@@ -528,8 +660,11 @@ public class FoolAgent extends Agent {
     private void computeBaseBids()	{
     	for (Query query : querySpace) {
     		Ad ad = getAd(query);
-        	Product product = ad.getProduct();       	
-    		baseBid.put(query, retailCatalog.getSalesProfit(product) * baseBidPerProductRevenuePercent);
+        	Product product = ad.getProduct();  
+    		//baseBid.put(query, retailCatalog.getSalesProfit(product) * baseBidPerProductRevenuePercent);
+        	baseBid.put(query, 10 * baseBidPerProductRevenuePercent);
+    		//System.out.println("Curr Product: "+product.getManufacturer()+"\t"+
+    		//		product.getComponent()+"\t"+baseBid.get(query));
     	}
     }
 
@@ -541,25 +676,131 @@ public class FoolAgent extends Agent {
     	double totalRevenuePerDay = 0;
     	double totalRevenuePerProduct = 0;
     	double maxBidCurrProduct = 0;
+    	double totalProductRevenue = 0;
+    	double totalRevenue = 0;
     	
 		for (Query query : querySpace) {
 			int index = salesReport.indexForEntry(query);
 			if (index >= 0) {
 				totalRevenuePerDay += salesReport.getRevenue(index);
+				totalRevenuePerProduct += salesReport.getRevenue(index);
 			}
 			
-    		Ad ad = getAd(query);
-        	Product product = ad.getProduct();       	
-
-			totalRevenuePerProduct += salesReport.getRevenue(query);
+			if(values.containsKey(query))
+				totalRevenue += values.get(query);
 		}
 		
 		for (Query query : querySpace) {
     		Ad ad = getAd(query);
-        	Product product = ad.getProduct();       	
-        	maxBidCurrProduct = retailCatalog.getSalesProfit(product) * 
-        			(totalRevenuePerDay/totalRevenuePerProduct);
+        	Product product = ad.getProduct();  
+        	
+        	if(values.containsKey(query))
+        		totalProductRevenue = values.get(query);
+        	
+        	//maxBidCurrProduct = retailCatalog.getSalesProfit(product) * 
+        	//		(totalRevenuePerDay/totalRevenuePerProduct);
+        	
+        	//if (totalRevenue)
+        	if(totalProductRevenue <= 0 || totalRevenue <= 0)	{
+        		maxBidCurrProduct = baseBid.get(query);
+        	} else {
+        		//maxBidCurrProduct = maxBidFactor * retailCatalog.getSalesProfit(product) * 
+        		//		(totalProductRevenue/totalRevenue);
+        		maxBidCurrProduct = maxBidFactor * 10 * 
+        				(totalProductRevenue/totalRevenue);
+        	}        	
 			maxBid.put(query, maxBidCurrProduct);
+			
+    		//System.out.println("Curr Product: "+product.getManufacturer()+"\t"+
+    		//		product.getComponent()+"\t"+baseBid.get(query)+"\t"+maxBid.get(query));
+
 		}
     }
+
+    private void spikeDetection()	{    	
+    	
+    	double clusterCenter1 = 0;
+    	double clusterCenter2 = 0;
+    	boolean first = true;
+    	
+    	if(simulationDay > 1){  
+    		//System.out.println("Spike: Valid day");
+    		for (Query query : querySpace) {
+    			Dataset productImpressions = new DefaultDataset();
+    			List<Double> currImpressionData = new ArrayList<Double>();
+    			
+    			if (impressionData.containsKey(query)){
+    				//System.out.println("Curr impression data : "+impressionData.get(query));
+    				if(impressionData.get(query).size()>=10)	{
+    					//System.out.println("Spike: Adding all points");
+    					currImpressionData.addAll(impressionData.get(query));
+    				} else {
+    					//System.out.println("Spike: Less than 10 points");
+    					spikeDetectPreviousDay.put(query,false);
+    					continue;
+    				}
+    			} else {
+    				//System.out.println("Spike: No query data");
+    				//System.out.println("Spike: Adding 0.0 point");
+    				//currImpressionData.add(0.0);
+					spikeDetectPreviousDay.put(query,false);
+					continue;
+    			}
+
+    			/*double[] value = new double[currImpressionData.size()];
+    			for(int i=0; i<currImpressionData.size(); i++)	{
+    				value[i] = currImpressionData.get(i);
+    				
+    			}*/
+    			
+    			for(ListIterator<Double> iter = currImpressionData.listIterator(); iter.hasNext();)	{
+    				double[] value = new double[] {iter.next()};
+    				Instance instance = new DenseInstance(value);
+    				productImpressions.add(instance);
+    			}
+    			
+    			//System.out.println("Before kmeans");
+    			Dataset[] clusteredImpressions = kmeansClusterer.cluster(productImpressions);
+    			//System.out.println("After kmeans");
+    			
+    			System.out.println("Clustering results : "+clusteredImpressions);
+    			if (clusteredImpressions.length != 2)	{
+    				System.out.println("Number of clusters found is not 2 (cluster = "+clusteredImpressions.length+" )");
+    				continue;
+    				//System.exit(simulationDay);
+    			} else {
+        			spikeDetectPreviousDay.put(query,false);
+        		}
+    			
+        		for (Dataset currCluster : clusteredImpressions){
+        			Instance avgInstance = DatasetTools.average(currCluster);
+        			if(first)	{
+        				clusterCenter1 = avgInstance.value(0);
+        				first = false;
+        			} else	{
+        				clusterCenter2 = avgInstance.value(0);
+        			}        			
+        		}
+        		System.out.println("Cluster centers : "+clusterCenter1+"\t"+clusterCenter2);
+        		
+        		if(Math.min(clusterCenter1,clusterCenter2)!=0)	{
+        			if(Math.max(clusterCenter1,clusterCenter2)/Math.min(clusterCenter1,clusterCenter2) 
+        					> minSpikeImpressionsDifference)	{
+        				if(!spikeDetectPreviousDay.get(query)){
+        					spikeDetect.put(query, true);
+        					spikeDetectPreviousDay.put(query,true);
+        				} else {
+        					spikeDetectPreviousDay.put(query,false);
+        				}
+        			} else {
+        				spikeDetectPreviousDay.put(query,false);
+        			}
+        		} else {
+        			spikeDetectPreviousDay.put(query,false);
+        		}
+    		}
+    	}
+    }    
 }
+
+
