@@ -121,6 +121,8 @@ public class FoolAgent extends Agent {
     Map<String, Set<Query>> queriesForComponent = new HashMap<String, Set<Query>>();
     
     Map<String, Set<Query>> queriesForManufacturer = new HashMap<String, Set<Query>>();
+    
+    QueryReport currQueryReport;
 
 
     public FoolAgent() {
@@ -285,10 +287,29 @@ public class FoolAgent extends Agent {
     	double rankModifier = getRankModifier(rankQuery(query, querySpace));
     	double specialModifier = getSpecialModifier(query);
     	double typeModifier = getTypeModifier(getType(query));
-    	return rankModifier*specialModifier*typeModifier;
+    	double loseModifier = getLoseModifier(query);
+    	return rankModifier*specialModifier*typeModifier*loseModifier;
     }
 
     /**
+     * This computes the modifier for the queries that we lose. This is a special case because we no longer no the impression of the query
+     * @param query
+     * @return
+     */
+    private double getLoseModifier(Query query) {
+		// TODO Auto-generated method stub
+    	double position = currQueryReport.getPosition(query, advertiserInfo.getAdvertiserId());
+    	System.out.format("for query %s %s agent %s at position %f\n", query.getManufacturer(), query.getComponent(), advertiserInfo.getAdvertiserId(), position);
+    	if (Double.isNaN(position))
+    	{
+    		System.out.format("for query %s %s agent %s get buffed\n", query.getManufacturer(), query.getComponent(), advertiserInfo.getAdvertiserId());
+    		return 1.8;	
+    	}
+    	else
+    		return 1.0;
+	}
+
+	/**
      * This computes the modifier for items that we are specialized in
      * @param query
      * @return
@@ -372,6 +393,7 @@ public class FoolAgent extends Agent {
      * @param queryReport the daily query report.
      */
     protected void handleQueryReport(QueryReport queryReport) {
+    	currQueryReport = queryReport;
 		for (Query query : querySpace) {
 
 			int index = queryReport.indexForEntry(query);
@@ -379,6 +401,8 @@ public class FoolAgent extends Agent {
 				impressions.put(query,impressions.get(query)+queryReport.getImpressions(index));
 				clicks.put(query, clicks.get(query)+queryReport.getClicks(index));
 			}
+			
+			// TODO develop detectBurst(query) function so that we can increase bid accordingly
 		}
     }
 
@@ -406,7 +430,7 @@ public class FoolAgent extends Agent {
      * @param simulationStatus the daily simulation status.
      */
     protected void handleSimulationStatus(SimulationStatus simulationStatus) {
-    	
+    	System.out.println(simulationStatus.getCurrentDate());
         computeQueryBidLimits();
         sendBidAndAds();
     }
