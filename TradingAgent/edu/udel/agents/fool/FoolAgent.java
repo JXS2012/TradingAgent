@@ -1,4 +1,4 @@
-package edu.udel.agents.fool;
+package udel.agents.fool;
 
 import se.sics.tasim.aw.Agent;
 import se.sics.tasim.aw.Message;
